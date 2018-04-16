@@ -144,6 +144,12 @@ Phaser.Sound = function (game, key, volume, loop, connect) {
     this.allowMultiple = false;
 
     /**
+    * @property {boolean} playOnce - Marks the Sound for deletion from SoundManager._sounds after playing once - useful for playing several identical sounds overlapping without flooding the sound channel
+    * @default
+    */
+    this.playOnce = false;
+
+    /**
     * @property {boolean} usingWebAudio - true if this sound is being played with Web Audio.
     * @readonly
     */
@@ -209,7 +215,7 @@ Phaser.Sound = function (game, key, volume, loop, connect) {
             this.gainNode = this.context.createGain();
         }
 
-        this.gainNode.gain.value = volume * this.game.sound.volume;
+        this.gainNode.gain.value = volume;
 
         if (connect)
         {
@@ -235,47 +241,47 @@ Phaser.Sound = function (game, key, volume, loop, connect) {
     }
 
     /**
-    * @property {Phaser.Signal} onDecoded - The onDecoded event is dispatched when the sound has finished decoding (typically for mp3 files)
+    * @property {Phaser.Signal} onDecoded - The onDecoded event is dispatched when the sound has finished decoding (typically for mp3 files). It passes one argument, this sound.
     */
     this.onDecoded = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onPlay - The onPlay event is dispatched each time this sound is played.
+    * @property {Phaser.Signal} onPlay - The onPlay event is dispatched each time this sound is played or a looping marker is restarted. It passes one argument, this sound.
     */
     this.onPlay = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onPause - The onPause event is dispatched when this sound is paused.
+    * @property {Phaser.Signal} onPause - The onPause event is dispatched when this sound is paused. It passes one argument, this sound.
     */
     this.onPause = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onResume - The onResume event is dispatched when this sound is resumed from a paused state.
+    * @property {Phaser.Signal} onResume - The onResume event is dispatched when this sound is resumed from a paused state. It passes one argument, this sound.
     */
     this.onResume = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onLoop - The onLoop event is dispatched when this sound loops during playback.
+    * @property {Phaser.Signal} onLoop - The onLoop event is dispatched when this sound loops during playback. It passes one argument, this sound.
     */
     this.onLoop = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onStop - The onStop event is dispatched when this sound stops playback.
+    * @property {Phaser.Signal} onStop - The onStop event is dispatched when this sound stops playback or when a non-looping marker completes. It passes two arguments: this sound and any {@link #currentMarker marker} that was playing.
     */
     this.onStop = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onMute - The onMute event is dispatched when this sound is muted.
+    * @property {Phaser.Signal} onMute - The onMute event is dispatched when this sound is muted. It passes one argument, this sound.
     */
     this.onMute = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onMarkerComplete - The onMarkerComplete event is dispatched when a marker within this sound completes playback.
+    * @property {Phaser.Signal} onMarkerComplete - The onMarkerComplete event is dispatched when a marker within this sound completes playback. It passes two arguments: the {@link #currentMarker} and this sound.
     */
     this.onMarkerComplete = new Phaser.Signal();
 
     /**
-    * @property {Phaser.Signal} onFadeComplete - The onFadeComplete event is dispatched when this sound finishes fading either in or out.
+    * @property {Phaser.Signal} onFadeComplete - The onFadeComplete event is dispatched when this sound finishes fading either in or out. It passes two arguments: this sound and its current {@link #volume}.
     */
     this.onFadeComplete = new Phaser.Signal();
 
@@ -418,6 +424,12 @@ Phaser.Sound.prototype = {
         this.isPlaying = false;
         this.currentTime = this.durationMS;
         this.stop();
+
+        if (this.playOnce)
+        {
+            this._markedToDelete = true;
+            this._removeFromSoundManager = true;
+        }
 
         if (this._markedToDelete)
         {
@@ -753,6 +765,9 @@ Phaser.Sound.prototype = {
                 if (this._sound && (this.game.device.cocoonJS || this._sound.readyState === 4))
                 {
                     this._sound.play();
+										
+                    this._sound.loop = this.loop;
+										
                     //  This doesn't become available until you call play(), wonderful ...
                     this.totalDuration = this._sound.duration;
 
@@ -786,6 +801,17 @@ Phaser.Sound.prototype = {
                     this.pendingPlayback = true;
                 }
             }
+        }
+
+        if (this.playOnce)
+        {
+            if (this.loop)
+            {
+                console.warn('Phaser.Sound.play: audio clip ' + this.name + ' cannot be deleted while looping.');
+            }
+
+            this._markedToDelete = true;
+            this._removeFromSoundManager = true;
         }
 
         return this;
@@ -856,14 +882,16 @@ Phaser.Sound.prototype = {
                     this._sound.connect(this.gainNode);
                 }
 
-                if (this.loop)
+                if (this.currentMarker === '')
                 {
-                    this._sound.loop = true;
-                }
-
-                if (!this.loop && this.currentMarker === '')
-                {
-                    this._sound.onended = this.onEndedHandler.bind(this);
+                    if (this.loop)
+                    {
+                        this._sound.loop = true;
+                    }
+                    else
+                    {
+                        this._sound.onended = this.onEndedHandler.bind(this);
+                    }
                 }
 
                 var duration = this.duration - (this.pausedPosition / 1000);
@@ -884,7 +912,14 @@ Phaser.Sound.prototype = {
                         }
                         else
                         {
-                            this._sound.start(0, p);
+                            if (this.currentMarker === '')
+                            {
+                                this._sound.start(0, p);
+                            }
+                            else
+                            {
+                                this._sound.start(0, p, duration);
+                            }
                         }
                     }
                     else

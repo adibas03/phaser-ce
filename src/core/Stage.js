@@ -262,6 +262,14 @@ Phaser.Stage.prototype.checkVisibility = function () {
         return _this.visibilityChange(event);
     };
 
+    this._onChangePause = function () {
+        return _this._onChange({ type: 'pause' });
+    };
+
+    this._onChangeResume = function () {
+        return _this._onChange({ type: 'resume' });
+    };
+
     this._onClick = function (event) {
         if ((document.hasFocus !== undefined) && !document.hasFocus())
         {
@@ -283,15 +291,23 @@ Phaser.Stage.prototype.checkVisibility = function () {
 
     window.addEventListener('click', this._onClick);
 
-    if (this.game.device.cocoonJSApp)
+    if (this.game.device.cocoonJSApp && CocoonJS.App)
     {
-        CocoonJS.App.onSuspended.addEventListener(function () {
-            Phaser.Stage.prototype.visibilityChange.call(_this, { type: "pause" });
-        });
+        if (CocoonJS.App.onSuspended)
+        {
+            CocoonJS.App.onSuspended.addEventListener(this._onChangePause);
+        }
 
-        CocoonJS.App.onActivated.addEventListener(function () {
-            Phaser.Stage.prototype.visibilityChange.call(_this, { type: "resume" });
-        });
+        if (CocoonJS.App.onActivated)
+        {
+            CocoonJS.App.onActivated.addEventListener(this._onChangeResume);
+        }
+
+        if (CocoonJS.App.on)
+        {
+            CocoonJS.App.on('activated', this._onChangeResume);
+            CocoonJS.App.on('suspended', this._onChangePause);
+        }
     }
 
 };
@@ -388,6 +404,46 @@ Phaser.Stage.prototype.destroy = function () {
     window.onfocus = null;
 
     window.removeEventListener('click', this._onClick);
+
+};
+
+/**
+* Adds an existing object to the Stage.
+*
+* The child is automatically added to the front of the Stage, and is displayed above every previous child.
+* Or if the _optional_ `index` is specified, the child is added at the location specified by the index value,
+* this allows you to control child ordering.
+*
+* If the object was already on the Stage, it is simply returned, and nothing else happens to it.
+*
+* @method Phaser.Stage#add
+* @param {DisplayObject} child - The display object to add as a child.
+* @param {boolean} [silent] - Unused. Kept for compatibility with {@link Phaser.Group#add}.
+* @param {integer} [index] - The index to insert the object to.
+* @return {DisplayObject} The child that was added to the group.
+*/
+Phaser.Stage.prototype.add = function (child, silent, index) {
+
+    if (child.parent === this)
+    {
+        return child;
+    }
+
+    if (child.body && child.parent && child.parent.hash)
+    {
+        child.parent.removeFromHash(child);
+    }
+
+    if (index === undefined)
+    {
+        this.addChild(child);
+    }
+    else
+    {
+        this.addChildAt(child, index);
+    }
+
+    return child;
 
 };
 

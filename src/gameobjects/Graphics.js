@@ -29,6 +29,10 @@
 * As you can tell, Graphics objects are a bit of a trade-off. While they are extremely useful, you need to be careful
 * in their complexity and quantity of them in your game.
 *
+* You may have to modify {@link Phaser.Graphics#scale} rather than {@link Phaser.Graphics#width} or
+* {@link Phaser.Graphics#height} to avoid an unusual race condition
+* ({@link #489 https://github.com/photonstorm/phaser-ce/issues/489}).
+*
 * @class Phaser.Graphics
 * @constructor
 * @extends PIXI.DisplayObjectContainer
@@ -109,7 +113,7 @@ Phaser.Graphics = function (game, x, y) {
     this.graphicsData = [];
 
     /**
-     * The tint applied to the graphic shape. This is a hex value. Apply a value of 0xFFFFFF to reset the tint.
+     * The tint applied to the graphic shape. This is a hex value. Apply a value of 0xFFFFFF (Phaser.Color.WHITE) to reset the tint.
      *
      * @property tint
      * @type Number

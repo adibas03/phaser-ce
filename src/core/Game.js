@@ -17,7 +17,7 @@
 * For example a Sprite has a `game` property, allowing you to talk to the various parts
 * of Phaser directly, without having to look after your own references.
 *
-* In it's most simplest form, a Phaser game can be created by providing the arguments
+* In its most simplest form, a Phaser game can be created by providing the arguments
 * to the constructor:
 *
 * ```javascript
@@ -174,6 +174,8 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
     * Clear the Canvas each frame before rendering the display list.
     * You can set this to `false` to gain some performance if your game always contains a background that completely fills the display.
     * This must be `true` to show any {@link Phaser.Stage#backgroundColor} set on the Stage.
+    * This is effectively **read-only after the game has booted**.
+    * Use the {@link GameConfig} setting `clearBeforeRender` when creating the game, or set `game.renderer.clearBeforeRender` afterwards.
     * @property {boolean} clearBeforeRender
     * @default
     */
@@ -339,6 +341,12 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
     this.lockRender = false;
 
     /**
+    * @property {boolean} pendingDestroy - Destroy the game at the next update.
+    * @default
+    */
+    this.pendingDestroy = false;
+
+    /**
     * @property {boolean} stepping - Enable core loop stepping with Game.enableStep().
     * @default
     * @readonly
@@ -392,7 +400,7 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
     this._codePaused = false;
 
     /**
-    * The ID of the current/last logic update applied this render frame, starting from 0.
+    * The ID of the current/last logic update applied this animation frame, starting from 0.
     * The first update is `currentUpdateID === 0` and the last update is `currentUpdateID === updatesThisFrame.`
     * @property {integer} currentUpdateID
     * @protected
@@ -400,11 +408,18 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
     this.currentUpdateID = 0;
 
     /**
-    * Number of logic updates expected to occur this render frame; will be 1 unless there are catch-ups required (and allowed).
+    * Number of logic updates expected to occur this animation frame; will be 1 unless there are catch-ups required (and allowed).
     * @property {integer} updatesThisFrame
     * @protected
     */
     this.updatesThisFrame = 1;
+
+    /**
+    * Number of renders expected to occur this animation frame. May be 0 if {@link #dropFrames is on} or {@link #forceSingleRender} is off; otherwise it will be 1.
+    * @property {integer} updatesThisFrame
+    * @protected
+    */
+    this.rendersThisFrame = 1;
 
     /**
     * @property {number} _deltaTime - Accumulate elapsed time until a logic update is due.
@@ -442,6 +457,16 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
     * @property {boolean} forceSingleUpdate - Should the game loop force a logic update, regardless of the delta timer? You can toggle it on the fly.
     */
     this.forceSingleUpdate = true;
+
+    /**
+    * @property {boolean} forceSingleRender - Should the game loop make one render per animation frame, even without a preceding logic update? (During spiraling conditions, {@link #dropFrames} is used instead.)
+    */
+    this.forceSingleRender = true;
+
+    /**
+    * @property {boolean} dropFrames - When {@link #forceSingleUpdate} is off, skip {@link #updateRender rendering} if logic updates are spiraling upwards.
+    */
+    this.dropFrames = false;
 
     /**
     * @property {number} _nextNotification - The soonest game.time.time value that the next fpsProblemNotifier can be dispatched.
@@ -503,27 +528,38 @@ Phaser.Game = function (width, height, renderer, parent, state, transparent, ant
 * A configuration object for {@link Phaser.Game}.
 *
 * @typedef {object} GameConfig
+* @property {boolean}            [GameConfig.alignH=false]                  - Sets {@link Phaser.ScaleManager#pageAlignHorizontally}.
+* @property {boolean}            [GameConfig.alignV=false]                  - Sets {@link Phaser.ScaleManager#pageAlignVertically}.
 * @property {number|string}      [GameConfig.antialias=true]
-* @property {string}             [GameConfig.backgroundColor=0]             - Sets {@link Phaser.Stage#backgroundColor}.
+* @property {number|string}      [GameConfig.backgroundColor=0]             - Sets {@link Phaser.Stage#backgroundColor}.
 * @property {HTMLCanvasElement}  [GameConfig.canvas]                        - An existing canvas to display the game in.
 * @property {string}             [GameConfig.canvasId]                      - `id` attribute value to assign to the game canvas.
 * @property {string}             [GameConfig.canvasStyle]                   - `style` attribute value to assign to the game canvas.
+* @property {boolean}            [GameConfig.clearBeforeRender=true]        - Sets {@link Phaser.Game#clearBeforeRender}.
+* @property {boolean}            [GameConfig.crisp=false]                   - Sets the canvas's `image-rendering` property to `pixelated` or `crisp-edges`. See {@link Phaser.Canvas.setImageRenderingCrisp}.
 * @property {boolean}            [GameConfig.disableVisibilityChange=false] - Sets {@link Phaser.Stage#disableVisibilityChange}
+* @property {boolean}            [GameConfig.disableStart=false]            - Prevents the game loop from starting, allowing you to call updates manually. Helpful for automated testing.
 * @property {boolean}            [GameConfig.enableDebug=true]              - Enable {@link Phaser.Utils.Debug}. You can gain a little performance by disabling this in production.
+* @property {boolean}            [GameConfig.failIfMajorPerformanceCaveat]  - Abort WebGL context creation if performance would be poor. You can use this with renderer AUTO.
 * @property {boolean}            [GameConfig.forceSetTimeout]               - Use {@link https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/setTimeout setTimeOut} for the game loop even if {@link https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame requestAnimationFrame} is available.
 * @property {number}             [GameConfig.fullScreenScaleMode]           - The scaling method used by the ScaleManager when in fullscreen.
 * @property {HTMLElement}        [GameConfig.fullScreenTarget]              - The DOM element on which the Fullscreen API enter request will be invoked.
 * @property {number|string}      [GameConfig.height=600]
 * @property {boolean}            [GameConfig.multiTexture=false]            - Enable support for multiple bound Textures in WebGL. Same as `{renderer: Phaser.WEBGL_MULTI}`.
 * @property {string|HTMLElement} [GameConfig.parent='']                     - The DOM element into which this games canvas will be injected.
-* @property {object}             [GameConfig.physicsConfig=null]
+* @property {object}             [GameConfig.physicsConfig]
 * @property {boolean}            [GameConfig.preserveDrawingBuffer=false]   - Whether or not the contents of the stencil buffer is retained after rendering.
 * @property {number}             [GameConfig.renderer=Phaser.AUTO]
 * @property {number}             [GameConfig.resolution=1]                  - The resolution of your game, as a ratio of canvas pixels to game pixels.
+* @property {boolean}            [GameConfig.roundPixels=false]             - Round pixel coordinates for rendering (rather than interpolating). Handy for crisp pixel art and speed on legacy devices.
+* @property {number}             [GameConfig.scaleH=1]                      - Horizontal scaling factor for USER_SCALE scale mode.
 * @property {number}             [GameConfig.scaleMode]                     - The scaling method used by the ScaleManager when not in fullscreen.
+* @property {number}             [GameConfig.scaleV=1]                      - Vertical scaling factor for USER_SCALE scale mode.
 * @property {number}             [GameConfig.seed]                          - Seed for {@link Phaser.RandomDataGenerator}.
-* @property {object}             [GameConfig.state=null]
+* @property {object}             [GameConfig.state]
 * @property {boolean}            [GameConfig.transparent=false]
+* @property {number}             [GameConfig.trimH=0]                       - Horizontal trim for USER_SCALE scale mode.
+* @property {number}             [GameConfig.trimV=0]                       - Vertical trim for USER_SCALE scale mode.
 * @property {number|string}      [GameConfig.width=800]
 */
 // Documentation stub for linking.
@@ -573,6 +609,11 @@ Phaser.Game.prototype = {
         if (config['antialias'] !== undefined)
         {
             this.antialias = config['antialias'];
+        }
+
+        if (config['clearBeforeRender'] !== undefined)
+        {
+            this.clearBeforeRender = config['clearBeforeRender'];
         }
 
         if (config['multiTexture'] !== undefined)
@@ -700,6 +741,11 @@ Phaser.Game.prototype = {
             }
         }
 
+        if (this.config['disableStart'])
+        {
+            return;
+        }
+
         if (this.cache.isReady)
         {
             this.raf.start();
@@ -788,6 +834,12 @@ Phaser.Game.prototype = {
     */
     setUpRenderer: function () {
 
+        if (!this.device.canvas)
+        {
+            // Nothing else to do
+            throw new Error('Phaser.Game - Cannot create Canvas 2d context, aborting.');
+        }
+
         if (this.config['canvas'])
         {
             this.canvas = this.config['canvas'];
@@ -806,42 +858,52 @@ Phaser.Game.prototype = {
             this.canvas.style['-webkit-full-screen'] = 'width: 100%; height: 100%';
         }
 
-        if (this.renderType === Phaser.HEADLESS || this.renderType === Phaser.CANVAS || (this.renderType === Phaser.AUTO && !this.device.webGL))
+        if (this.config['crisp'])
         {
-            if (this.device.canvas)
-            {
-                this.renderer = new PIXI.CanvasRenderer(this);
-
-                this.context = this.renderer.context;
-
-                if (this.renderType === Phaser.AUTO) {
-                    this.renderType = Phaser.CANVAS;
-                }
-            }
-            else
-            {
-                throw new Error('Phaser.Game - Cannot create Canvas or WebGL context, aborting.');
-            }
+            Phaser.Canvas.setImageRenderingCrisp(this.canvas);
         }
-        else
-        {
-            //  They requested WebGL and their browser supports it
 
+        if ((this.renderType === Phaser.WEBGL) ||
+            (this.renderType === Phaser.WEBGL_MULTI) ||
+            (this.renderType === Phaser.AUTO && this.device.webGL))
+        {
             if (this.multiTexture || this.renderType === Phaser.WEBGL_MULTI)
             {
                 PIXI.enableMultiTexture();
-
                 this.multiTexture = true;
             }
 
-            this.renderType = Phaser.WEBGL;
+            try
+            {
+                this.renderer = new PIXI.WebGLRenderer(this, this.config);
+                this.renderType = Phaser.WEBGL;
+                this.context = null;
+                this.canvas.addEventListener('webglcontextlost', this.contextLost.bind(this), false);
+                this.canvas.addEventListener('webglcontextrestored', this.contextRestored.bind(this), false);
+            }
+            catch (webGLRendererError)
+            {
+                this.renderer = null;
+                this.multiTexture = false;
+                PIXI._enableMultiTextureToggle = false;
 
-            this.renderer = new PIXI.WebGLRenderer(this);
+                if (this.renderType === Phaser.WEBGL)
+                {
+                    // No fallback
+                    throw webGLRendererError;
+                }
+            }
+        }
 
-            this.context = null;
+        if (!this.renderer)
+        {
+            this.renderer = new PIXI.CanvasRenderer(this, this.config);
+            this.context = this.renderer.context;
 
-            this.canvas.addEventListener('webglcontextlost', this.contextLost.bind(this), false);
-            this.canvas.addEventListener('webglcontextrestored', this.contextRestored.bind(this), false);
+            if (this.renderType === Phaser.AUTO)
+            {
+                this.renderType = Phaser.CANVAS;
+            }
         }
 
         if (this.device.cocoonJS)
@@ -899,6 +961,12 @@ Phaser.Game.prototype = {
     */
     update: function (time) {
 
+        if (this.pendingDestroy)
+        {
+            this.destroy();
+            return;
+        }
+
         this.time.update(time);
 
         if (this._kickstart)
@@ -926,12 +994,19 @@ Phaser.Game.prototype = {
                 this.fpsProblemNotifier.dispatch();
             }
 
-            // reset the _deltaTime accumulator which will cause all pending dropped frames to be permanently skipped
+            // reset the _deltaTime accumulator which will cause all pending late updates to be permanently skipped
             this._deltaTime = 0;
             this._spiraling = 0;
 
-            // call the game render update exactly once every frame
-            this.updateRender(this.time.slowMotion * this.time.desiredFps);
+            if (this.dropFrames)
+            {
+                this.rendersThisFrame = 0;
+            }
+            else
+            {
+                this.updateRender(this.time.slowMotion * this.time.desiredFps);
+                this.rendersThisFrame = 1;
+            }
         }
         else
         {
@@ -950,6 +1025,15 @@ Phaser.Game.prototype = {
             if (this.forceSingleUpdate)
             {
                 this.updatesThisFrame = Math.min(1, this.updatesThisFrame);
+            }
+
+            if (this.forceSingleRender)
+            {
+                this.rendersThisFrame = 1;
+            }
+            else
+            {
+                this.rendersThisFrame = Math.min(1, this.updatesThisFrame);
             }
 
             while (this._deltaTime >= slowStep)
@@ -984,8 +1068,10 @@ Phaser.Game.prototype = {
 
             this._lastCount = count;
 
-            // call the game render update exactly once every frame unless we're playing catch-up from a spiral condition
-            this.updateRender(this._deltaTime / slowStep);
+            if (this.rendersThisFrame > 0)
+            {
+                this.updateRender(this._deltaTime / slowStep);
+            }
         }
 
     },
@@ -1005,6 +1091,8 @@ Phaser.Game.prototype = {
             {
                 this.pendingStep = true;
             }
+
+            this.time.countUpdate();
 
             this.scale.preUpdate();
             this.debug.preUpdate();
@@ -1031,6 +1119,7 @@ Phaser.Game.prototype = {
             this.scale.pauseUpdate();
             this.state.pauseUpdate(timeStep);
             this.debug.preUpdate();
+            this.input.pauseUpdate();
         }
 
         this.stage.updateTransform();
@@ -1058,6 +1147,8 @@ Phaser.Game.prototype = {
         {
             return;
         }
+
+        this.time.countRender();
 
         this.state.preRender(elapsedTime);
 
@@ -1120,6 +1211,8 @@ Phaser.Game.prototype = {
     *
     * Then sets all of those local handlers to null, destroys the renderer, removes the canvas from the DOM
     * and resets the PIXI default renderer.
+    *
+    * To destroy the game during an update callback, set {@link #pendingDestroy} instead.
     *
     * @method Phaser.Game#destroy
     */

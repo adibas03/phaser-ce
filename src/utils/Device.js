@@ -397,6 +397,7 @@ Phaser.Device = function () {
     /**
     * @property {boolean} webAudio - Is the WebAudio API available?
     * @default
+    * @see http://mohayonao.github.io/web-audio-test-api/
     */
     this.webAudio = false;
 
@@ -811,8 +812,7 @@ Phaser.Device._initialize = function () {
         device.file = !!window['File'] && !!window['FileReader'] && !!window['FileList'] && !!window['Blob'];
         device.fileSystem = !!window['requestFileSystem'];
 
-        device.webGL = ( function () { try { var canvas = document.createElement( 'canvas' ); /*Force screencanvas to false*/ canvas.screencanvas = false; return !! window.WebGLRenderingContext && ( canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' ) ); } catch( e ) { return false; } } )();
-        device.webGL = !!device.webGL;
+        device.webGL = !!window.WebGLRenderingContext;
 
         device.worker = !!window['Worker'];
 
@@ -1404,22 +1404,6 @@ Phaser.Device.canPlayVideo = function (type) {
  */
 Phaser.Device.needsTouchUnlock = function () {
     return !!(!this.cocoonJS && (this.iOS || this.android) || (window.PhaserGlobal && window.PhaserGlobal.fakeiOSTouchLock));
-};
-
-/**
-* Returns false.
-*
-* @deprecated
-* @method isConsoleOpen
-* @memberof Phaser.Device.prototype
-* @return false
-*/
-Phaser.Device.isConsoleOpen = function () {
-
-    console.warn('Phaser.Device.isConsoleOpen is deprecated and will be removed.');
-
-    return false;
-
 };
 
 /**

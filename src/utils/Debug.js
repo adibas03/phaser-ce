@@ -8,7 +8,7 @@
 * A collection of methods for displaying debug information about game objects.
 *
 * If your game is running in Canvas mode, then you should invoke all of the Debug methods from
-* your games `render` function. This is because they are drawn directly onto the game canvas
+* your game's `render` function. This is because they are drawn directly onto the game canvas
 * itself, so if you call any debug methods outside of `render` they are likely to be overwritten
 * by the game itself.
 *
@@ -288,6 +288,37 @@ Phaser.Utils.Debug.prototype = {
     },
 
     /**
+    * Render Sound Manager information, including volume, mute, audio mode, and locked status.
+    *
+    * @method Phaser.Utils.Debug#sound
+    * @param {number} x - X position of the debug info to be rendered.
+    * @param {number} y - Y position of the debug info to be rendered.
+    * @param {string} [color='rgb(255,255,255)'] - color of the debug info to be rendered. (format is css color string).
+    */
+    sound: function (x, y, color) {
+
+      var sound = this.game.sound;
+
+      this.start(x, y, color);
+
+      if (sound.noAudio)
+      {
+        this.line('Audio is disabled');
+      }
+      else
+      {
+        this.line('Volume: ' + sound.volume.toFixed(2) + (sound.mute ? ' (Mute)' : ''));
+        this.line('Mute on pause: ' + sound.muteOnPause);
+        this.line('Using: ' + (sound.usingWebAudio ? ('Web Audio - ' + sound.context.state) : 'Audio Tag'));
+        this.line('Touch locked: ' + sound.touchLocked);
+        this.line('Sounds: ' + sound._sounds.length);
+      }
+
+      this.stop();
+
+    },
+
+    /**
     * Render Sound information, including decoded state, duration, volume and more.
     *
     * @method Phaser.Utils.Debug#soundInfo
@@ -299,13 +330,13 @@ Phaser.Utils.Debug.prototype = {
     soundInfo: function (sound, x, y, color) {
 
         this.start(x, y, color);
-        this.line('Sound: ' + sound.key + ' Locked: ' + sound.game.sound.touchLocked);
+        this.line('Sound: ' + sound.key + ' Touch locked: ' + sound.game.sound.touchLocked);
         this.line('Is Ready?: ' + this.game.cache.isSoundReady(sound.key) + ' Pending Playback: ' + sound.pendingPlayback);
         this.line('Decoded: ' + sound.isDecoded + ' Decoding: ' + sound.isDecoding);
-        this.line('Total Duration: ' + sound.totalDuration + ' Playing: ' + sound.isPlaying);
-        this.line('Time: ' + sound.currentTime);
-        this.line('Volume: ' + sound.volume + ' Muted: ' + sound.mute);
-        this.line('WebAudio: ' + sound.usingWebAudio + ' Audio: ' + sound.usingAudioTag);
+        this.line('Playing: ' + sound.isPlaying + ' Loop: ' + sound.loop);
+        this.line('Time: ' + sound.currentTime + 'ms Total: ' + sound.totalDuration.toFixed(3) + 's');
+        this.line('Volume: ' + sound.volume.toFixed(2) + (sound.mute ? ' (Mute)' : ''));
+        this.line('Using: ' + (sound.usingWebAudio ? 'Web Audio' : 'Audio Tag'));
 
         if (sound.currentMarker !== '')
         {
@@ -366,17 +397,12 @@ Phaser.Utils.Debug.prototype = {
         this.start(x, y, color);
         this.line('Camera (' + camera.width + ' x ' + camera.height + ')');
         this.line('x: ' + camera.x + ' y: ' + camera.y);
-
-        if (bounds)
-        {
-            this.line('Bounds x: ' + bounds.x + ' y: ' + bounds.y + ' w: ' + bounds.width + ' h: ' + bounds.height);
-        }
-
-        this.line('View x: ' + view.x + ' y: ' + view.y + ' w: ' + view.width + ' h: ' + view.height);
+        this.line('Bounds: ' + (bounds ? ('x: ' + bounds.x + ' y: ' + bounds.y + ' w: ' + bounds.width + ' h: ' + bounds.height) : 'none'));
+        this.line('View: x: ' + view.x + ' y: ' + view.y + ' w: ' + view.width + ' h: ' + view.height);
         this.line('Deadzone: ' + (deadzone ? ('x: ' + deadzone.x + ' y: ' + deadzone.y + ' w: ' + deadzone.width + ' h: ' + deadzone.height) : deadzone));
         this.line('Total in view: ' + camera.totalInView);
         this.line('At limit: x: ' + camera.atLimit.x + ' y: ' + camera.atLimit.y);
-        this.line('Target: ' + (target ? (target.name || target) : target));
+        this.line('Target: ' + (target ? (target.name || target) : 'none'));
         this.stop();
 
     },
@@ -574,7 +600,7 @@ Phaser.Utils.Debug.prototype = {
 
         this.start(x, y, color);
 
-        this.line('Sprite: ' + ' (' + sprite.width + ' x ' + sprite.height + ') anchor: ' + sprite.anchor.x + ' x ' + sprite.anchor.y);
+        this.line('Sprite: ' + (sprite.name || '') + ' (' + sprite.width + ' x ' + sprite.height + ') anchor: ' + sprite.anchor.x + ' x ' + sprite.anchor.y);
         this.line('x: ' + sprite.x.toFixed(1) + ' y: ' + sprite.y.toFixed(1));
         this.line('angle: ' + sprite.angle.toFixed(1) + ' rotation: ' + sprite.rotation.toFixed(1));
         this.line('visible: ' + sprite.visible + ' in camera: ' + sprite.inCamera);
@@ -774,7 +800,7 @@ Phaser.Utils.Debug.prototype = {
     text: function (text, x, y, color, font) {
 
         color = color || 'rgb(255,255,255)';
-        font = font || '16px Courier';
+        font = font || this.font;
 
         this.start();
         this.context.font = font;
@@ -1049,6 +1075,86 @@ Phaser.Utils.Debug.prototype = {
             (this.game.renderType === Phaser.WEBGL ? 'WebGL' : 'Canvas') + ' ' +
             (this.game.device.webAudio ? 'WebAudio' : 'HTML Audio'),
             x, y, color, this.font);
+
+    },
+
+    /**
+    * Prints game/canvas dimensions and {@link Phaser.ScaleManager game scale} settings.
+    *
+    * @method Phaser.Utils.Debug#scale
+    * @param {number} x - The X value the debug info will start from.
+    * @param {number} y - The Y value the debug info will start from.
+    * @param {string} [color='rgb(255,255,255)'] - The color the debug text will drawn in.
+    */
+    scale: function (x, y, color) {
+
+        this.start(x, y, color);
+
+        var scale = this.game.scale;
+        var factor = scale.scaleFactorInversed;
+        var bounds = scale._parentBounds;
+        var x = ' x ';
+
+        this.line('Game: ' + this.game.width + x + this.game.height);
+        this.line('Canvas: ' + scale.width + x + scale.height +
+            ' (' + factor.x.toFixed(2) + x + factor.y.toFixed(2) + ')' +
+            ' [' + scale.aspectRatio.toFixed(2) + ']');
+        this.line('Mode: ' + Phaser.ScaleManager.MODES[scale.currentScaleMode] +
+            (scale.currentScaleMode === Phaser.ScaleManager.USER_SCALE ?
+            (' (' + scale._userScaleFactor.x + x + scale._userScaleFactor.y + ')') :
+            ''));
+        this.line('Parent: ' + (scale.parentIsWindow ? 'window' : scale.parentNode) +
+            (bounds.empty ? '' : (' (' + bounds.width + x + bounds.height + ')')));
+        this.line('Screen: ' + scale.classifyOrientation(scale.screenOrientation) +
+            (scale.incorrectOrientation ? ' (incorrect)' : ''));
+
+        this.stop();
+
+    },
+
+    /**
+    * Prints the progress of a {@link Phaser.Loader}.
+    *
+    * Typically you would call this within a {@link State#loadRender} callback and pass `game.load` ({@link Phaser.Game#load}).
+    *
+    * You can enable {@link Phaser.Loader#resetLocked} to temporarily hold the loader in its 'complete' state.
+    * Just remember to disable it before restarting the loader (such as when changing states).
+    *
+    * @method Phaser.Utils.Debug#loader
+    * @param {Phaser.Loader} loader - The loader. Usually `game.load` ({@link Phaser.Game#load}).
+    * @param {number} x - The X value the debug info will start from.
+    * @param {number} y - The Y value the debug info will start from.
+    * @param {string} [color='rgb(255,255,255)'] - The color the debug text will drawn in.
+    */
+    loader: function (loader, x, y, color) {
+
+        var pad = Phaser.Utils.pad;
+
+        this.start(x, y, color);
+
+        if (loader.hasLoaded)
+        {
+            this.line('Complete' + (loader.resetLocked ? ' [locked]' : ''));
+        }
+        else if (loader.isLoading)
+        {
+            this.line('Loading');
+        }
+        else
+        {
+            this.line('Not started');
+        }
+
+        if (!loader.hasLoaded || loader.resetLocked)
+        {
+            this.line('Progress: ' + (pad(loader.progress, 3) + '%'));
+            this.line('Files: ' + loader._loadedFileCount + ' of ' +
+                                  loader._totalFileCount);
+            this.line('Packs: ' + loader._loadedPackCount + ' of ' +
+                                  loader._loadedPackCount);
+        }
+
+        this.stop();
 
     },
 

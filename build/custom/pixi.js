@@ -7,7 +7,7 @@
 *
 * Phaser - http://phaser.io
 *
-* v2.9.2 "2017-11-09" - Built: Thu Nov 09 2017 18:06:04
+* v2.10.3 "2018-03-22" - Built: Thu Mar 22 2018 10:07:29
 *
 * By Richard Davey http://www.photonstorm.com @photonstorm
 *
@@ -121,12 +121,15 @@ PIXI.DisplayObject = function () {
 
     /**
     * The visibility of this DisplayObject. A value of `false` makes the object invisible.
-    * A value of `true` makes it visible. Please note that an object with a visible value of
-    * `false` is skipped during the render pass. Equally a DisplayObject with visible false will
-    * not render any of its children.
+    * A value of `true` makes it visible.
+    *
+    * An object with a visible value of `false` is skipped during the render pass.
+    * Equally a DisplayObject with visible `false` will not render any of its children.
     *
     * The value of this property does not reflect any visible values set further up the display list.
-    * To obtain that value please see the `worldVisible` property.
+    * To obtain that value please see the {@link #worldVisible} property.
+    *
+    * Objects that are not {@link #worldVisible} do not update their {@link #worldPosition}.
     *
     * @property {boolean} visible
     * @default
@@ -1460,7 +1463,7 @@ PIXI.DisplayObjectContainer.prototype._renderCanvas = function (renderSession) {
 /**
  * The width of the displayObjectContainer, setting this will actually modify the scale to achieve the value set
  *
- * @property width
+ * @name PIXI.DisplayObjectContainer#width
  * @type Number
  */
 Object.defineProperty(PIXI.DisplayObjectContainer.prototype, 'width', {
@@ -1489,7 +1492,7 @@ Object.defineProperty(PIXI.DisplayObjectContainer.prototype, 'width', {
 /**
  * The height of the displayObjectContainer, setting this will actually modify the scale to achieve the value set
  *
- * @property height
+ * @name PIXI.DisplayObjectContainer#height
  * @type Number
  */
 Object.defineProperty(PIXI.DisplayObjectContainer.prototype, 'height', {
@@ -1572,7 +1575,7 @@ PIXI.Sprite = function (texture) {
     this._height = 0;
 
     /**
-     * The tint applied to the sprite. This is a hex value. A value of 0xFFFFFF will remove any tint effect.
+     * The tint applied to the sprite. This is a hex value. A value of 0xFFFFFF (Phaser.Color.WHITE) will remove any tint effect.
      *
      * @property tint
      * @type Number
@@ -3348,7 +3351,7 @@ PIXI._enableMultiTextureToggle = false;
  * @constructor
  * @param game {Phaser.Game} A reference to the Phaser Game instance
  */
-PIXI.WebGLRenderer = function(game) {
+PIXI.WebGLRenderer = function(game, config) {
 
     /**
     * @property {Phaser.Game} game - A reference to the Phaser Game instance.
@@ -3445,6 +3448,7 @@ PIXI.WebGLRenderer = function(game) {
     this._contextOptions = {
         alpha: this.transparent,
         antialias: game.antialias,
+        failIfMajorPerformanceCaveat: config.failIfMajorPerformanceCaveat,
         premultipliedAlpha: this.transparent && this.transparent !== 'notMultiplied',
         stencil: true,
         preserveDrawingBuffer: this.preserveDrawingBuffer
@@ -3530,7 +3534,7 @@ PIXI.WebGLRenderer = function(game) {
     this.renderSession.stencilManager = this.stencilManager;
     this.renderSession.renderer = this;
     this.renderSession.resolution = this.resolution;
-    this.renderSession.roundPixels = false;
+    this.renderSession.roundPixels = config.roundPixels || false;
     this.renderSession.maxTextureAvailableSpace = null; // filled in setTexturePriority()
 
     // time init the context..
@@ -6686,7 +6690,7 @@ PIXI.CanvasTinter.tintWithPerPixel = function(texture, color, canvas)
  * @constructor
  * @param game {Phaser.Game} A reference to the Phaser Game instance
  */
-PIXI.CanvasRenderer = function (game) {
+PIXI.CanvasRenderer = function (game, config) {
 
     /**
     * @property {Phaser.Game} game - A reference to the Phaser Game instance.
@@ -6775,6 +6779,11 @@ PIXI.CanvasRenderer = function (game) {
      */
     this.context = this.view.getContext("2d", { alpha: this.transparent } );
 
+    if (!this.context)
+    {
+        throw new Error('Failed to create a Canvas 2d context.');
+    }
+
     /**
      * Boolean flag controlling canvas refresh.
      *
@@ -6813,7 +6822,7 @@ PIXI.CanvasRenderer = function (game) {
          * If true Pixi will Math.floor() x/y values when rendering, stopping pixel interpolation.
          * Handy for crisp pixel art and speed on legacy devices.
          */
-        roundPixels: false
+        roundPixels: config.roundPixels || false
     };
 
     this.mapBlendModes();
@@ -7153,18 +7162,6 @@ PIXI.BaseTexture.prototype.destroy = function()
     this.source = null;
 
     this.unloadFromGPU();
-};
-
-/**
- * Changes the source image of the texture
- *
- * @method PIXI.BaseTexture#updateSourceImage
- * @param newSrc {String} the path of the image
- * @deprecated This method is deprecated. Please use Phaser.Sprite.loadTexture instead.
- */
-PIXI.BaseTexture.prototype.updateSourceImage = function(newSrc)
-{
-    console.warn("PIXI.BaseTexture.updateSourceImage is deprecated. Use Phaser.Sprite.loadTexture instead.");
 };
 
 /**
